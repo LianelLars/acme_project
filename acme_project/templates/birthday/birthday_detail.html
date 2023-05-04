@@ -1,0 +1,21 @@
+<!-- birthday/birthday_detail.html -->
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block content %}
+  ID записи: {{ object.id }}
+  <hr>
+  {% if birthday.image %}
+    <div>
+      <!-- Картинку сделаем побольше, чем на странице list/: высотой 200px -->
+      <img src="{% static birthday.image.url %}" height="200">
+    </div>
+  {% endif %}
+   <h2>Привет, {{ object.first_name }} {{ object.last_name }}</h2>      
+  {% if birthday_countdown == 0 %}
+    <p>С днём рождения!</p>
+  {% else %}
+    <p>Осталось дней до дня рождения: <b>{{ birthday_countdown }}</b></p>
+  {% endif %}
+{% endblock content %}
