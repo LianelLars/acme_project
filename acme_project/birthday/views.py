@@ -1,14 +1,17 @@
 from django.shortcuts import render, get_object_or_404, redirect
-from django.core.paginator import Paginator
-from .forms import BirthdayForm
+from django.core.exceptions import PermissionDenied
+from django.contrib.auth.decorators import login_required
+# from django.core.paginator import Paginator
+from .forms import BirthdayForm, CongratulationForm
 from .models import Birthday
 from django.views.generic import (
-    CreateView, ListView, DetailView, UpdateView, DeleteView
+    CreateView, ListView, DetailView, UpdateView, DeleteView,
     )
+from django.contrib.auth.mixins import LoginRequiredMixin
 from .utils import calculate_birthday_countdown
 from django.urls import reverse_lazy
 
-
+# @login_required
 # def delete_birthday(request, pk):
 #     # Получаем объект модели или выбрасываем 404 ошибку.
 #     instance = get_object_or_404(Birthday, pk=pk)
@@ -26,10 +29,16 @@ from django.urls import reverse_lazy
 #     return render(request, 'birthday/birthday.html', context)
 
 
-class BirthdayListView(ListView):
+class BirthdayListView(LoginRequiredMixin, ListView):
     # Указываем модель, с которой работает CBV...
     model = Birthday
     # ...сортировку, которая будет применена при выводе списка объектов:
+    # По умолчанию этот класс 
+    # выполняет запрос queryset = Birthday.objects.all(),
+    # но мы его переопределим:
+    queryset = Birthday.objects.prefetch_related(
+        'tags'
+        ).select_related('author')
     ordering = 'id'
     # ...и даже настройки пагинации:
     paginate_by = 10
@@ -39,6 +48,12 @@ class BirthdayListView(ListView):
 class BirthdayCreateView(CreateView):
     model = Birthday
     form_class = BirthdayForm
+
+    def form_valid(self, form):
+        # Присвоить полю author объект пользователя из запроса.
+        form.instance.author = self.request.user
+        # Продолжить валидацию, описанную в форме.
+        return super().form_valid(form)
 
 
 class BirthdayDetailView(DetailView):
@@ -53,6 +68,14 @@ class BirthdayDetailView(DetailView):
             self.object.birthday
         )
         # Возвращаем словарь контекста.
+        # Записываем в переменную form пустой объект формы.
+        context['form'] = CongratulationForm()
+        # Запрашиваем все поздравления для выбранного дня рождения.
+        context['congratulations'] = (
+            # Дополнительно подгружаем авторов комментариев,
+            # чтобы избежать множества запросов к БД.
+            self.object.congratulations.select_related('author')
+        )
         return context
 
 
@@ -60,10 +83,50 @@ class BirthdayUpdateView(UpdateView):
     model = Birthday
     form_class = BirthdayForm
 
+    def dispatch(self, request, *args, **kwargs):
+        # При получении объекта не указываем автора.
+        # Результат сохраняем в переменную.
+        instance = get_object_or_404(Birthday, pk=kwargs['pk'])
+        # Сверяем автора объекта и пользователя из запроса.
+        if instance.author != request.user:
+            # Здесь может быть как вызов ошибки, так и редирект на нужную страницу.
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
 
 class BirthdayDeleteView(DeleteView):
     model = Birthday
     success_url = reverse_lazy('birthday:list')
+
+    def dispatch(self, request, *args, **kwargs):
+        # При получении объекта не указываем автора.
+        # Результат сохраняем в переменную.
+        instance = get_object_or_404(Birthday, pk=kwargs['pk'])
+        # Сверяем автора объекта и пользователя из запроса.
+        if instance.author != request.user:
+            # Здесь может быть как вызов ошибки, так и редирект на нужную страницу.
+            raise PermissionDenied
+        return super().dispatch(request, *args, **kwargs)
+
+
+# Будут обработаны POST-запросы только от залогиненных пользователей.
+@login_required
+def add_comment(request, pk):
+    # Получаем объект дня рождения или выбрасываем 404 ошибку.
+    birthday = get_object_or_404(Birthday, pk=pk)
+    # Функция должна обрабатывать только POST-запросы.
+    form = CongratulationForm(request.POST)
+    if form.is_valid():
+        # Создаём объект поздравления, но не сохраняем его в БД.
+        congratulation = form.save(commit=False)
+        # В поле author передаём объект автора поздравления.
+        congratulation.author = request.user
+        # В поле birthday передаём объект дня рождения.
+        congratulation.birthday = birthday
+        # Сохраняем объект в БД.
+        congratulation.save()
+    # Перенаправляем пользователя назад, на страницу дня рождения.
+    return redirect('birthday:detail', pk=pk) 
 
 
 # Добавим опциональный параметр pk.
@@ -128,4 +191,3 @@ class BirthdayDeleteView(DeleteView):
 #     # объект страницы пагинатора
 #     context = {'page_obj': page_obj}
 #     return render(request, 'birthday/birthday_list.html', context)
-

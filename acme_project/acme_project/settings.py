@@ -7,6 +7,15 @@ SECRET_KEY = 'django-insecure-m&$lzdzkutvrbr5vt=jpm)7#g7cken_tk%($ty+w902n7wb#=e
 DEBUG = True
 
 ALLOWED_HOSTS = ['192.168.29.128']
+AUTH_USER_MODEL = 'user.MyUser'
+# Подключаем бэкенд filebased.EmailBackend:
+EMAIL_BACKEND = 'django.core.mail.backends.filebased.EmailBackend'
+# Указываем директорию, в которую будут сохраняться файлы писем:
+EMAIL_FILE_PATH = BASE_DIR / 'sent_emails'
+# LOGIN SETTINGS
+LOGIN_URL = 'auth:login'
+LOGIN_REDIRECT_URL = 'pages:homepage'
+CSRF_FAILURE_VIEW = 'core.views.csrf_failure'
 
 INSTALLED_APPS = [
     'django_bootstrap5',
@@ -17,6 +26,9 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'birthday.apps.BirthdayConfig',
+    'user.apps.UserConfig',
+    'users.apps.UsersConfig',
+    'core.apps.CoreConfig',
     'pages.apps.PagesConfig',
 ]
 
